@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>3D Random Terrain</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+        <style>
+            /* 기본 스타일 */
+            body {
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                overflow: hidden;
+            }
+            canvas {
+                display: block;
+            }
+            /* 흰색 공간 스타일 */
+            .info-panel {
+                background-color: #ffffff;
+                width: 100%;
+                height: 25%;
+                /* 캔버스가 화면의 75%, 아래 div가 25% 차지 */
+                box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+                /* 위쪽 그림자 */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            /* 테이블 스타일 */
+            table {
+                margin: 10px;
+                border-collapse: collapse;
+                height: 20vh;
+                max-width: 400px;
+                text-align: left;
+                font-family: 'Arial', sans-serif;
+                color: #333333;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                /* 테이블 그림자 */
+            }
+            td,
+            th {
+                padding: 12px 12px;
+                border: 1px solid #dddddd;
+                width: fit-content;
+            }
+            td {
+                font-size: 16px;
+            }
+            /* 반응형 스타일 */
+            @media (max-width: 768px) {
+                table {
+                    width: 90%;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="info-panel">
+            <table id="real">
+            </table>
+            <table id="se">
+            </table>
+            <table id="ac">
+                <tr>
+                    <td></td><td></td><td></td><td>실제 가속도</td>
+                </tr><tr>
+                    <td></td><td></td><td></td><td>가속도 센서</td>
+                </tr>
+            </table>
+            <table id="er">
+                <tr>
+                    <td>속도 오차</td><td>위치 오차</td>
+                </tr><tr>
+                    <td></td><td></td>
+                </tr>
+            </table>
+        </div>
+        <script defer>
+            // Helper function to generate random noise
+            function generateRandomNoise(width, height, scale) {
+                const noise = [];
+                for (let y = 0; y < height; y++) {
+                    noise[y] = [];
+                    for (let x = 0; x < width; x++) {
+                        // Introduce randomness without periodic patterns
+                        const value = Math.random() * 10 - 5; // Random value between -1 and 1
+                        noise[y][x] = value * scale;
+                    }
+                }
+                return noise;
+            }
+
+            // Smooth the noise using averaging
+            function smoothNoise(noise, width, height) {
+                const smoothed = [];
+                for (let y = 0; y < height; y++) {
+                    smoothed[y] = [];
+                    for (let x = 0; x < width; x++) {
+                        // Average neighboring points
+                        let sum = 0;
+                        let count = 0;
+                        for (let dy = -4; dy <= 4; dy++) {
+                            for (let dx = -4; dx <= 4; dx++) {
+                                const nx = x + dx;
+                                const ny = y + dy;
+                                if (nx >= 0 && ny >= 0 && nx < width && ny < height) {
+                                    sum += noise[ny][nx];
+                                    count++;
+                                }
+                            }
+                        }
+                        smoothed[y][x] = sum / count;
+                    }
+                }
+                return smoothed;
+            }
+
+            function clamp(v, a, b) {
+                if (v < a) return a;
+                if (v > b) return b;
+                return v;
+            }
+
+            function trunc(v) {
+                return v.toFixed(3);
+            }
+            // Create the scene
+            const scene = new THREE.Scene();
+
+            // Camera setup
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            
+            camera.position.y = 20;
+
+            // Renderer setup
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight * 0.75);
+            document
+                .body
+                .appendChild(renderer.domElement);
+
+            // Generate terrain data
+            const width = 100; // Number of vertices in width
+            const height = 100; // Number of vertices in height
+            const scale = 10; // Scale of noise
+            let terrainData = generateRandomNoise(width, height, scale);
+            terrainData = smoothNoise(terrainData, width, height);
+
+            // Create geometry for terrain
+            const geometry = new THREE.PlaneGeometry(100, 100, width - 1, height - 1);
+            geometry.rotateX(-Math.PI / 2);
+
+            // Apply random noise as height
+            const vertices = geometry.attributes.position.array;
+            for (let i = 0, j = 0; i < vertices.length; i += 3, j++) {
+                const x = j % width;
+                const y = Math.floor(j / width);
+                vertices[i + 1] = terrainData[y][x]; // Adjust height
+            }
+            geometry.attributes.position.needsUpdate = true;
+            geometry.computeVertexNormals();
+
+
+            // Create terrain mesh
+            const terrain = new THREE.Mesh(
+                geometry,
+                new THREE.MeshStandardMaterial(
+                {color: 0x8b4513, wireframe: false}
+            ));
+            scene.add(terrain);
+
+
+
+
+            const plane = new THREE.Mesh(
+                new THREE.BoxBufferGeometry(2, 2, 2), 
+                new THREE.MeshStandardMaterial( {
+                    color: 0xaaaaaa,
+                })
+            );
+            scene.add(plane);
+            const ex = new THREE.Mesh(
+                new THREE.BoxBufferGeometry(2, 2, 2), 
+                new THREE.MeshStandardMaterial( {
+                    color: 0xaaffaa,
+                })
+            );
+            scene.add(ex);
+            // Add lights
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light
+                .position
+                .set(50, 50, 50);
+            scene.add(light);
+
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+
+
+            plane.position.y = 20;
+            
+            const cellLen = parseInt(prompt("지형 인식 격자 칸(기본 4):") || 4),
+                ch = Math.floor(cellLen / 2), hee = parseFloat(prompt("지형 인식 오차(기본 0.5):") || 0.5),
+                ace = parseFloat(prompt("가속도 오차(기본 1):") || 1);
+            
+            function sub(x, z, data) {
+                const xi = Math.floor(x + 50) - ch, xr = x - Math.floor(x);
+                const zi = Math.floor(z + 50) - ch, zr = z - Math.floor(z);
+                const rt = [];
+                for (let i = 0; i < cellLen; i++) {
+                    const r = [];
+                    for (let j = 0; j < cellLen; j++)
+                        r.push(
+                            (data[i][j] - terrainData[zi + i][xi + j]) * (1 - xr) * (1 - zr) +
+                            (data[i][j] - terrainData[zi + i + 1][xi + j]) * (1 - xr) * zr +
+                            (data[i][j] - terrainData[zi + i][xi + j + 1]) * xr * (1 - zr) +
+                            (data[i][j] - terrainData[zi + i + 1][xi + j + 1]) * xr * zr
+                        );
+                    rt.push(r);
+                }
+                return rt;
+            }
+            function repeat(v, c) {
+                return Array(c).fill(0).map(i=>Array(c).fill(v));
+            }
+
+            const rt = document.getElementById("real"), se = document.getElementById("se"), act = document.getElementById("ac"), er = document.getElementById('er');
+            for (let i = 0; i < cellLen; i++) {
+                const rr = rt.insertRow();
+                const sr = se.insertRow();
+                for (let j = 0; j < cellLen; j++) {
+                    rr.insertCell(0);
+                    sr.insertCell(0);
+                }
+            }
+
+            // Render loop
+            let deg = 0;
+            const planeVelocity = new THREE.Vector3(0,0,0), planeAcc = new THREE.Vector3(0,0,0);
+            const ranAcc = 0.0025, vLim = 0.2;
+
+            let sprePos = new THREE.Vector3(0,20,0), spreVel = new THREE.Vector3(0,0,0);
+            function animate() {
+                deg += 0.002;
+                camera.position.z = Math.sin(deg) * 100;
+                camera.position.x = Math.cos(deg) * 100;
+                camera.lookAt(0,0,0);
+
+                const realData = sub(plane.position.x, plane.position.z, repeat(plane.position.y, cellLen));
+                const sensorData = [];
+                
+                for (let i = 0; i < cellLen; i++) {
+                    const r = se.rows[i], rr = rt.rows[i];
+                    sensorData.push([]);
+                    for (let j = 0; j < cellLen; j++) {
+                        const v = realData[i][j] + Math.random() * hee - hee / 2
+                        sensorData[i].push(v);
+                        r.cells[j].innerText = trunc(v);
+                        rr.cells[j].innerText = trunc(realData[i][j]);
+                    }
+                }
+                const acs = new THREE.Vector3(
+                    planeAcc.x + Math.random() * ace - ace / 2,
+                    planeAcc.y + Math.random() * ace - ace / 2,
+                    planeAcc.z + Math.random() * ace - ace / 2,
+                )
+                for (let i = 0; i < 3; i++) {
+                    const c = ['x','y','z'][i];
+                    act.rows[0].cells[i].innerText = trunc(planeAcc[c]);
+                    act.rows[1].cells[i].innerText = trunc(acs[c]);
+                }
+                const heap = [];
+                let deb = false;
+                class hNode {
+                    constructor(x, z) {
+                        this.x = x;
+                        this.z = z;
+                        const s = sub(x, z, repeat(0, cellLen));
+                        let sum = 0;
+                        for (let i = 0; i < cellLen; i++) for (let j = 0; j < cellLen; j++)
+                            sum += sensorData[i][j] - s[i][j];
+                        const y = this.y = sum / cellLen ** 2;
+                        this.cost = (new THREE.Vector3(x,y,z)).distanceTo(sprePos);
+                    }  
+                }
+                function hPush(x, z) {
+                    const n = new hNode(x, z);
+                    let p = heap.length, c;
+                    while ((c = p) && heap[p = p - 1 >> 1].cost > n.cost) heap[c] = heap[p];
+                    heap[c] = n;
+                }
+                function hPop() {
+                    const rt = heap[0], n = heap.pop();
+                    if (!heap.length) return rt;
+                    let c = 0, p;
+                    while (
+                        (c = (p = c) << 1 | 1) < heap.length &&
+                        (c + 1 >= heap.length || (c += heap[c].cost > heap[++c].cost)) &&
+                        (heap[c].cost < n.cost)
+                    )
+                        heap[p] = heap[c];
+                    heap[p] = n;
+                    return rt;
+                }
+                sprePos.add(spreVel.add(acs));
+                ex.position.set(sprePos.x,sprePos.y,sprePos.z);
+                const visit = new Set();
+                hPush(sprePos.x, sprePos.z);
+                visit.add(trunc(sprePos.x)+trunc(sprePos.z));
+
+                let cur, cnt = 1000, min = Infinity, mx, mz, my;
+                while (heap.length && (cur = hPop()).cost <= 5 && cnt--) {
+                    let err = 0;
+                    const s = sub(cur.x, cur.z, repeat(cur.y, cellLen));
+                    for (let i = 0; i < cellLen; i++) for (let j = 0; j < cellLen; j++)
+                        err += (s[i][j] - sensorData[i][j]) ** 2;
+                    err = Math.sqrt(err / cellLen **2)
+                    const v = err * 6 + cur.cost;
+                    if (v < min) {
+                        mx = cur.x; mz = cur.z; my = cur.y;
+                        min = v;
+                    }
+                    for (let i = 0; i < 4; i++) {
+                        const [dx, dz] = [ [ -1, 0 ], [ 1, 0 ], [ 0, -1 ], [ 0, 1 ] ][i];
+                        const nx = cur.x + dx * 0.1, nz = cur.z + dz * 0.1;
+                        const key = trunc(nx)+trunc(nz);
+                        if (Math.abs(nx) < 45 && Math.abs(nz) < 45 && !visit.has(key)) {
+                            visit.add(key);
+                            hPush(nx, nz);
+                        }
+                    }
+                }
+                const corr = new THREE.Vector3(mx,my,mz).sub(sprePos);
+                sprePos.add(corr);
+                spreVel.add(corr);
+
+                
+                planeAcc.add(new THREE.Vector3(
+                    (Math.random() * 2 - 1) * ranAcc,
+                    (Math.random() * 2 - 1) * ranAcc,
+                    (Math.random() * 2 - 1) * ranAcc
+                ));
+                planeAcc.add(new THREE.Vector3().subVectors(
+                    new THREE.Vector3(
+                        0, 20, 0
+                    ),
+                    plane.position,
+                ).multiplyScalar(1/10000));
+
+
+                const alen = planeAcc.length();
+                if (alen > vLim) planeAcc.multiplyScalar(vLim / alen);
+                planeVelocity.add(planeAcc);
+                const vlen = planeVelocity.length();
+                if (vlen > vLim) planeVelocity.multiplyScalar(vLim / vlen);
+
+                plane.position.add(planeVelocity);
+                plane.position.x = clamp(plane.position.x, -45, 45);
+                plane.position.y = clamp(plane.position.y, 15, 30);
+                plane.position.z = clamp(plane.position.z, -45, 45);
+
+
+                er.rows[1].cells[0].innerText = trunc(spreVel.distanceTo(planeVelocity));
+                er.rows[1].cells[1].innerText = trunc(sprePos.distanceTo(plane.position));
+
+                renderer.render(scene, camera);
+                requestAnimationFrame(animate);
+            }
+
+            animate();
+
+            // Adjust for window resize
+            window.addEventListener('resize', () => {
+                renderer.setSize(window.innerWidth, window.innerHeight * 0.75);
+                camera.aspect = window.innerWidth / window.innerHeight / 0.75;
+                camera.updateProjectionMatrix();
+            });
+        </script>
+    </body>
+</html>
