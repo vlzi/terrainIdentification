@@ -211,7 +211,7 @@
             
             const cellLen = parseInt(prompt("지형 인식 격자 칸(기본 4):") || 4),
                 ch = Math.floor(cellLen / 2), hee = parseFloat(prompt("지형 인식 오차(기본 0.5):") || 0.5),
-                ace = parseFloat(prompt("가속도 오차(기본 1):") || 1);
+                ace = parseFloat(prompt("가속도 오차(기본 1):") || 1), prp = parseFloat(prompt("지형 인식 반영률(기본 6):") || 6);
             
             function sub(x, z, data) {
                 const xi = Math.floor(x + 50) - ch, xr = x - Math.floor(x);
@@ -325,7 +325,7 @@
                     for (let i = 0; i < cellLen; i++) for (let j = 0; j < cellLen; j++)
                         err += (s[i][j] - sensorData[i][j]) ** 2;
                     err = Math.sqrt(err / cellLen **2)
-                    const v = err * 6 + cur.cost;
+                    const v = err * prp + cur.cost;
                     if (v < min) {
                         mx = cur.x; mz = cur.z; my = cur.y;
                         min = v;
